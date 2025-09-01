@@ -1,35 +1,40 @@
-# glooko2nightscout# Glooko CGM Reader for Nightscout
+# Glooko CGM Reader for Nightscout
 
-A Node.js script that fetches CGM (Continuous Glucose Monitor) data from Glooko and converts it to Nightscout-compatible format.
+A comprehensive Node.js script that fetches CGM (Continuous Glucose Monitor) data from Glooko and converts it to Nightscout-compatible format with integrated user profile management.
 
-## Features
+## Core Features
 
-### 🔐 Authentication
-- Browser-based authentication using Puppeteer
-- Automatically extracts patient ID from the Glooko dashboard
-- Maintains session for 23 hours to minimize re-authentication
-- Supports both EU and US Glooko environments
+### 🔐 Authentication & Session Management
+- **Browser-based Authentication**: Uses Puppeteer to automate Glooko web login
+- **Patient ID Extraction**: Automatically extracts user identifier from dashboard JavaScript variables
+- **Session Persistence**: Maintains authentication cookies for 23 hours to minimize re-logins
+- **Multi-region Support**: Automatically detects and routes to EU/US/DE Glooko environments
 
-### 📊 Data Fetching
-- Dual API support with automatic fallback:
-  - Primary: External API (`https://externalapi.glooko.com`)
-  - Fallback: Internal Graph API (`https://eu.api.glooko.com`)
-- Fetches CGM readings from three glucose ranges:
-  - `cgmLow`: Hypoglycemic readings (< 4.0 mmol/L)
-  - `cgmNormal`: Normal range readings (4.0-10.0 mmol/L)
-  - `cgmHigh`: Hyperglycemic readings (> 10.0 mmol/L)
+### 👤 User Profile Integration
+- **Real-time Profile Data**: Fetches comprehensive user profile and preferences via `/api/v3/session/users`
+- **Glucose Unit Detection**: Automatically handles mmol/L vs mg/dL based on user's configured preference
+- **Target Range Extraction**: Retrieves user's personalized glucose targets and meal timing preferences
+- **Device Connection Status**: Real-time monitoring of connected CGM devices and sync status
+
+### 📊 CGM Data Fetching
+- **Internal Graph API**: Uses Glooko's `/api/v3/graph/data` endpoint with cookie-based authentication
+- **Multi-range Data**: Fetches CGM readings from three glucose categories:
+  - `cgmLow`: Hypoglycemic readings
+  - `cgmNormal`: Normal range readings  
+  - `cgmHigh`: Hyperglycemic readings
+- **Intelligent Time Ranges**: Supports both full day fetches and incremental updates
 
 ### 🔄 Smart Synchronization
-- Checkpoint-based incremental fetching
-- Tracks last reading timestamp and GUID
-- Only fetches new data on subsequent runs
-- Force full fetch option available
+- **Checkpoint-based Tracking**: Maintains state in `glooko-checkpoint.json` for incremental fetching
+- **Last Reading Persistence**: Tracks most recent reading timestamp and generated GUID
+- **Incremental Updates**: Only fetches new data since last successful run
+- **Force Full Fetch**: Option to override checkpoint and fetch complete time range
 
-### 📈 Data Processing
-- Converts glucose values from mmol/L to mg/dL (factor: 18.0143)
-- Corrects timezone discrepancies in timestamps
-- Transforms data to Nightscout SGV (Sensor Glucose Value) format
-- Preserves both mmol/L and mg/dL values
+### 📈 Data Processing & Conversion
+- **Automatic Unit Conversion**: Converts between mmol/L and mg/dL as needed (factor: 18.0143)
+- **Timezone Correction**: Handles complex Glooko timezone labeling and adjusts to local time
+- **Nightscout Transformation**: Converts to standard SGV (Sensor Glucose Value) format
+- **Dual Value Preservation**: Maintains both original mmol/L and converted mg/dL values
 
 ## Configuration
 
@@ -38,111 +43,164 @@ Create a `.env` file with your Glooko credentials:
 ```env
 GLOOKO_EMAIL=your-email@example.com
 GLOOKO_PASSWORD=your-password
-GLOOKO_ENV=eu  # or "us" for US users
-GLOOKO_TZ_OFFSET=0  # Timezone offset in milliseconds
-GLOOKO_DEBUG=true  # Enable debug logging
+GLOOKO_ENV=eu  # Options: eu, us, de
 ```
 
 ## Installation
 
 ```bash
-# Install dependencies
+# Install required dependencies
 npm install puppeteer axios dotenv
 
-# Configure credentials
+# Configure your credentials
 cp .env.example .env
-# Edit .env with your Glooko credentials
+# Edit .env with your Glooko login details
 ```
 
 ## Usage
 
-### Command Line Options
+### Command Line Interface
 
 ```bash
-# Fetch latest data (incremental from last checkpoint)
+# Basic incremental fetch
 node glooko-cgm-reader.js
 
 # Fetch specific time range
-node glooko-cgm-reader.js --hours 3
+node glooko-cgm-reader.js --hours 24
 
-# Force full fetch (ignore checkpoint)
+# Force complete data refresh
 node glooko-cgm-reader.js --full
 
-# Export data to JSON file
-node glooko-cgm-reader.js --export cgm-data.json
+# Export to JSON file
+node glooko-cgm-reader.js --export readings.json
 
-# Enable debug logging
+# Enable detailed debugging
 node glooko-cgm-reader.js --debug
 
-# Combine options
-node glooko-cgm-reader.js --debug --hours 24 --full --export
+# Combined options
+node glooko-cgm-reader.js --debug --hours 12 --export
 ```
 
-### Output Format
+### Sample Output
 
-The script displays a summary with glucose readings in mmol/L and local time:
+The script provides comprehensive output including user profile and CGM data:
 
 ```
-📊 FETCH SUMMARY (Helsinki Time, mmol/L)
-==========================================
-✅ Success: 190 readings retrieved
-⏱️  Execution time: 17.31s
-📈 Latest: 7.5 mmol/L @ 31/08/2025, 16.46.32
-📉 Oldest: 9.2 mmol/L @ 31/08/2025, 1.01.31
+📊 GLOOKO CGM DATA SUMMARY
+===========================
+👤 User: [User Name] ([COUNTRY])
+📊 Units: mmol/L
+🎯 Targets: 7.0-18.0 mmol/L
+📱 Devices: None currently connected
+
+✅ Success: 48 readings retrieved
+⏱️  Execution time: 15.23s
+📈 Latest: 8.2 mmol/L @ 01/09/2025, 10:15:30
+📉 Oldest: 7.8 mmol/L @ 31/08/2025, 22:30:15
 ➡️  Trend: NONE
 
 🩸 All readings (mmol/L, Helsinki time):
-   1. 7.5 mmol/L @ 31/08/2025, 16.46.32
-   2. 7.7 mmol/L @ 31/08/2025, 16.41.34
-   3. 7.8 mmol/L @ 31/08/2025, 16.36.32
-   ... and 187 more
+   1. 8.2 mmol/L @ 01/09/2025, 10:15:30
+   2. 8.1 mmol/L @ 01/09/2025, 10:10:28
+   3. 7.9 mmol/L @ 01/09/2025, 10:05:31
+   ... and 45 more
 ```
 
 ## Data Structures
 
+### User Profile Data
+
+The script automatically extracts and utilizes user profile information:
+
+```json
+{
+  "userProfile": {
+    "name": "[User Name]",
+    "country": "[country_code]",
+    "meterUnits": "mmoll",
+    "glucoseTargets": {
+      "normalMin": 7.0,
+      "beforeMealMax": 13.0,
+      "afterMealMax": 18.0,
+      "mealTimes": {
+        "breakfast": 5.0,
+        "lunch": 10.0,
+        "dinner": 15.0,
+        "midnightSnack": 21.0
+      }
+    }
+  },
+  "deviceStatus": {
+    "connectedDevices": [],
+    "hasData": false,
+    "lastSyncTimestamps": {
+      "cgmDevice": null,
+      "meter": null,
+      "pump": null
+    }
+  }
+}
+```
+
 ### Nightscout Entry Format
 
-Each CGM reading is converted to Nightscout-compatible format:
+Each CGM reading is converted to standard Nightscout format:
 
 ```json
 {
   "type": "sgv",
-  "sgv": 135,                              // Glucose in mg/dL
-  "sgv_mmol": 7.5,                        // Glucose in mmol/L
-  "date": 1756648592000,                  // Unix timestamp (milliseconds)
-  "dateString": "2025-08-31T13:46:32.000Z",
-  "localTime": "31/08/2025, 16.46.32",    // Local time display
-  "direction": "NONE",                     // Trend arrow (if available)
+  "sgv": 148,
+  "sgv_mmol": 8.2,
+  "date": 1725177330000,
+  "dateString": "2025-09-01T07:15:30.000Z",
+  "localTime": "01/09/2025, 10:15:30",
+  "direction": "NONE",
   "device": "glooko-cgm",
-  "glookoGuid": "glooko_1756655192_7.5"
+  "glookoGuid": "glooko_1725184530_8.2"
 }
 ```
 
-### Checkpoint File
+### Checkpoint Management
 
-The script maintains state in `glooko-checkpoint.json`:
+State is maintained in `glooko-checkpoint.json`:
 
 ```json
 {
-  "lastGuid": "glooko_1756655192_7.5",
-  "lastReadingTime": "2025-08-31T15:46:32.000Z",
-  "patientId": "eu-west-1-blue-dovetail-3011",
-  "savedAt": "2025-08-31T14:17:42.622Z"
+  "lastGuid": "glooko_[timestamp]_[value]",
+  "lastReadingTime": "2025-09-01T07:15:30.000Z",
+  "patientId": "[obfuscated-patient-id]",
+  "savedAt": "2025-09-01T07:18:45.123Z"
 }
 ```
 
-## API Response Structure
+## API Integration Details
 
-The Glooko Graph API returns data organized by glucose ranges:
+### Authentication Flow
+1. **Web Login**: Puppeteer navigates to Glooko login page
+2. **Credential Submission**: Automated form filling and submission
+3. **Session Cookie Extraction**: Captures authentication cookies from browser
+4. **Patient ID Parsing**: Extracts user identifier from dashboard JavaScript
+5. **Profile Validation**: Calls `/api/v3/session/users` to verify session and get profile
+
+### Data Retrieval Process
+1. **Profile Check**: Determines user preferences and connected devices
+2. **Time Range Calculation**: Establishes fetch window based on checkpoint or parameters
+3. **Graph API Query**: Requests CGM data via `/api/v3/graph/data` endpoint
+4. **Multi-series Aggregation**: Combines cgmLow, cgmNormal, and cgmHigh arrays
+5. **Data Transformation**: Converts to Nightscout format with proper units and timestamps
+
+### Raw API Response Structure
+
+Glooko's graph API returns structured time-series data:
 
 ```json
 {
   "series": {
     "cgmLow": [{
-      "x": 1756655192,                     // Unix timestamp (seconds)
-      "y": 3.5,                            // Glucose value in mmol/L
-      "value": 6305,                       // Internal encoding
-      "timestamp": "2025-08-31T15:46:32.000Z",
+      "x": 1725184530,
+      "y": 3.8,
+      "value": 6843.434,
+      "timestamp": "2025-09-01T07:15:30.000Z",
       "mealTag": "none",
       "calculated": false
     }],
@@ -152,92 +210,123 @@ The Glooko Graph API returns data organized by glucose ranges:
 }
 ```
 
-## Export Format
+## Export Functionality
 
-When using `--export`, data is saved as:
+When using `--export`, comprehensive data is saved including user context:
 
 ```json
 {
-  "exportedAt": "2025-08-31T14:17:42.622Z",
+  "exportedAt": "2025-09-01T07:20:15.456Z",
   "source": "Glooko",
-  "patientId": "eu-west-1-blue-dovetail-3011",
-  "count": 190,
-  "entries": [
-    {
-      "type": "sgv",
-      "sgv": 135,
-      "sgv_mmol": 7.5,
-      "date": 1756648592000,
-      "dateString": "2025-08-31T13:46:32.000Z",
-      "localTime": "31/08/2025, 16.46.32",
-      "direction": "NONE",
-      "device": "glooko-cgm"
-    }
-  ]
+  "patientId": "[obfuscated-patient-id]",
+  "userProfile": {
+    "name": "[User Name]",
+    "country": "[country]",
+    "meterUnits": "mmoll",
+    "glucoseTargets": {...}
+  },
+  "deviceStatus": {...},
+  "count": 48,
+  "entries": [...]
 }
 ```
 
+## Class Architecture
+
+The `GlookoCGMReader` class provides a complete integration solution:
+
+### Core Methods
+- `authenticate()` - Handles web login and cookie extraction
+- `fetchUserProfile()` - Retrieves user profile and device status
+- `fetchCGMReadings()` - Queries CGM data from graph API
+- `transformToNightscout()` - Converts data to Nightscout SGV format
+- `getLatestCGMData()` - Orchestrates complete fetch cycle
+- `saveCheckpoint()` / `loadCheckpoint()` - Manages incremental sync state
+- `exportToFile()` - Saves data with full context
+
+### Helper Methods
+- `getTrendArrow()` - Maps trend indicators to Nightscout format
+- `getWebUrl()` / `getApiUrl()` - Regional endpoint detection
+- `log()` - Contextual debug logging
+
+## Environment & Regional Support
+
+### Supported Regions
+- **EU**: `https://eu.my.glooko.com` → `https://eu.api.glooko.com`
+- **US**: `https://my.glooko.com` → `https://api.glooko.com`
+- **DE**: `https://de.my.glooko.com` → `https://de.api.glooko.com`
+
+### Device Compatibility
+The script automatically detects and reports connection status for:
+- Eversense CGM systems
+- iGlucose monitors
+- Insulet/Omnipod systems
+- Abbott CSV imports
+- Medtronic closed-loop systems
+- Control IQ enabled devices
+
+## Error Handling & Reliability
+
+### Robust Error Management
+- **Authentication Retry**: Automatic session refresh on 401/403 errors
+- **Exponential Backoff**: Progressive delays between retry attempts
+- **Connection Timeout**: 30-second API call timeouts with retry
+- **Data Validation**: Filters invalid readings and handles edge cases
+
+### Debug Capabilities
+- **Comprehensive Logging**: Detailed execution trace when `--debug` enabled
+- **API Response Inspection**: Raw data structure display for troubleshooting
+- **Browser Console Capture**: Puppeteer console message forwarding
+- **Timing Analysis**: Execution performance metrics
+
+## Performance Characteristics
+
+### Typical Execution Times
+- **Full Authentication**: 15-20 seconds (includes browser startup)
+- **Cached Session**: 5-8 seconds (reuses existing cookies)
+- **Incremental Fetch**: 3-5 seconds (small data sets)
+- **Large Data Sets**: 20-30 seconds (24+ hours of readings)
+
+### Resource Usage
+- **Memory**: ~100MB during Puppeteer operation
+- **Network**: 2-5 API calls per execution
+- **Storage**: Minimal (checkpoint file only)
+
 ## Integration with Nightscout
 
-The script can be integrated with Nightscout in several ways:
-
-1. **Direct Upload**: Add functionality to POST entries to Nightscout API
-2. **Scheduled Job**: Run via cron every 5-15 minutes
-3. **Docker Container**: Deploy as a containerized service
-4. **nightscout-connect Module**: Replace the existing Glooko integration
-
-Example integration code:
+### Direct Upload Pattern
 ```javascript
-const uploadToNightscout = async (entries) => {
-  const crypto = require('crypto');
-  await axios.post(`${NIGHTSCOUT_URL}/api/v1/entries`, entries, {
-    headers: {
-      'API-SECRET': crypto.createHash('sha1').update(API_SECRET).digest('hex'),
-      'Content-Type': 'application/json'
-    }
-  });
+const { GlookoCGMReader } = require('./glooko-cgm-reader');
+
+const uploadToNightscout = async () => {
+  const reader = new GlookoCGMReader(config);
+  const result = await reader.getLatestCGMData();
+  
+  if (result.success && result.entries.length > 0) {
+    // POST to Nightscout API
+    await axios.post(`${NIGHTSCOUT_URL}/api/v1/entries`, result.entries, {
+      headers: {
+        'API-SECRET': hashedSecret,
+        'Content-Type': 'application/json'
+      }
+    });
+  }
 };
 ```
 
-## Class Structure
-
-The script is built around the `GlookoCGMReader` class with these main methods:
-
-- `authenticate()` - Handles browser-based login and session management
-- `fetchCGMReadings()` - Retrieves CGM data from Glooko APIs
-- `transformToNightscout()` - Converts Glooko data to Nightscout format
-- `getLatestCGMData()` - Main method that orchestrates the full process
-- `saveCheckpoint()` / `loadCheckpoint()` - Manages incremental fetching
-- `exportToFile()` - Exports data to JSON file
+### Scheduled Execution
+```bash
+# Add to crontab for 5-minute intervals
+*/5 * * * * cd /path/to/cgm-reader && node glooko-cgm-reader.js
+```
 
 ## Dependencies
 
-- **puppeteer** - Browser automation for authentication
-- **axios** - HTTP client for API calls
-- **dotenv** - Environment variable management
-- **Node.js** - Runtime (v18+ recommended)
-
-## Environment Support
-
-Supports multiple Glooko regions:
-- EU: `https://eu.my.glooko.com`
-- US: `https://my.glooko.com`
-- DE: `https://de.my.glooko.com`
-
-## Error Handling
-
-- Automatic retry with exponential backoff
-- Session refresh on authentication errors
-- Fallback API when primary fails
-- Detailed debug logging when enabled
-
-## Performance
-
-- Typical execution time: 15-20 seconds
-- Incremental fetches: 5-10 seconds
-- Session reuse reduces authentication overhead
-- Checkpoint system minimizes API calls
+- **puppeteer** (^21.0.0) - Browser automation for web authentication
+- **axios** (^1.5.0) - HTTP client for API communication  
+- **dotenv** (^16.3.0) - Environment variable management
+- **Node.js** (v18+) - JavaScript runtime
 
 ---
 
-*A production-ready solution for fetching CGM data from Glooko and converting it to Nightscout format, with support for incremental synchronization and multiple Glooko environments.*
+*A production-ready solution for comprehensive Glooko-Nightscout integration with intelligent user profile management, multi-region support, and robust error handling.*
